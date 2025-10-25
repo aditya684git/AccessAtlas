@@ -22,7 +22,6 @@ This project uses the **VizWiz dataset** for object detection and **OpenStreetMa
 | Backend     | FastAPI (Python)                    |
 | AI Models   | TensorFlow / PyTorch                |
 | Map API     | OpenStreetMap (Nominatim + Overpass)|
-| Cloud       | AWS S3, Lambda (optional)           |
 | Voice       | pyttsx3 / Google TTS                |
 ---
 ### 📦 Datasets
