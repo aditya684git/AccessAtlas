@@ -1,0 +1,98 @@
+# Production model configuration with transfer learning
+# ResNet18 backbone with pretrained ImageNet weights
+
+# Data paths
+data:
+  tags_csv: ../../data/tags.csv
+  images_dir: ../../data/images
+  train_split: 0.7
+  val_split: 0.15
+  test_split: 0.15
+
+# Model architecture
+model:
+  # Backbone options: custom, resnet18, resnet34, resnet50,
+  # efficientnet_b0, efficientnet_b1, mobilenet_v3_small, mobilenet_v3_large
+  backbone: resnet18
+  pretrained: true
+  freeze_layers: 0  # 0 = train all layers, >0 = freeze first N layers
+  
+  # Metadata and fusion
+  metadata_hidden: 64
+  fusion_hidden: 256
+  fusion_dropout: 0.3
+  classifier_dropout: 0.3
+  
+  # Image settings
+  image_size: 224
+  num_classes: 5
+
+# Tag types (must match your data)
+tag_types:
+  - ramp
+  - elevator
+  - tactile_path
+  - entrance
+  - obstacle
+
+# Source types (must match your data)
+source_types:
+  - user
+  - osm
+  - model
+
+# Training hyperparameters
+training:
+  num_epochs: 50
+  batch_size: 32
+  learning_rate: 0.0001  # Lower LR for transfer learning
+  weight_decay: 0.0001
+  
+  optimizer: adamw  # adam, adamw, sgd
+  momentum: 0.9  # for SGD only
+  
+  # Learning rate scheduling
+  scheduler: cosine  # step, cosine, plateau, none
+  step_lr_step_size: 20
+  step_lr_gamma: 0.1
+  plateau_patience: 5
+  plateau_factor: 0.5
+  
+  # Optimization
+  grad_clip: 1.0
+  grad_accumulation_steps: 1
+  
+  # Early stopping
+  early_stopping_patience: 10
+
+# Data augmentation
+augmentation:
+  enabled: true
+  random_horizontal_flip: 0.5
+  random_rotation: 15
+  random_crop_scale: [0.8, 1.0]
+  color_jitter_brightness: 0.2
+  color_jitter_contrast: 0.2
+
+# Evaluation settings
+evaluation:
+  confusion_matrix: true
+  per_class_metrics: true
+  save_misclassified: true
+  top_k_errors: 20
+
+# Logging and checkpointing
+logging:
+  checkpoint_dir: checkpoints
+  log_dir: logs
+  error_dir: errors
+  log_interval: 10
+  save_best_only: false
+  save_last: true
+  tensorboard: false
+
+# Hardware settings
+device: cuda  # cuda or cpu
+num_workers: 4
+pin_memory: true
+seed: 42

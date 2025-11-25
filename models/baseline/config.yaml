@@ -1,0 +1,63 @@
+augmentation:
+  color_jitter_brightness: 0.2
+  color_jitter_contrast: 0.2
+  enabled: true
+  random_crop_scale:
+  - 0.8
+  - 1.0
+  random_horizontal_flip: 0.5
+  random_rotation: 15
+data:
+  images_dir: ../../data/images
+  tags_csv: ../../data/tags.csv
+  test_split: 0.15
+  train_split: 0.7
+  val_split: 0.15
+device: cuda
+evaluation:
+  confusion_matrix: true
+  per_class_metrics: true
+  save_misclassified: true
+  top_k_errors: 20
+logging:
+  checkpoint_dir: checkpoints
+  error_dir: errors
+  log_dir: logs
+  log_interval: 10
+  save_best_only: true
+  save_last: true
+  tensorboard: false
+model:
+  cnn_channels:
+  - 32
+  - 64
+  - 128
+  cnn_dropout: 0.3
+  fusion_hidden: 256
+  image_size: 224
+  metadata_hidden: 64
+  num_classes: 5
+num_workers: 4
+pin_memory: true
+seed: 42
+source_types:
+- user
+- osm
+- model
+tag_types:
+- ramp
+- elevator
+- tactile_path
+- entrance
+- obstacle
+training:
+  batch_size: 16
+  early_stopping_patience: 10
+  grad_clip: 1.0
+  learning_rate: 0.001
+  num_epochs: 50
+  optimizer: adam
+  scheduler: step
+  step_lr_gamma: 0.1
+  step_lr_step_size: 20
+  weight_decay: 0.0001

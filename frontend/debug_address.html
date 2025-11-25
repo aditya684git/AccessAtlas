@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Debug Address Fetching</title>
+</head>
+<body>
+  <h1>Debug Nominatim Address Fetching</h1>
+  <button onclick="testAddress()">Test Address Fetch</button>
+  <button onclick="checkOfflineMode()">Check Offline Mode</button>
+  <button onclick="clearTags()">Clear All Tags</button>
+  <button onclick="showTags()">Show Stored Tags</button>
+  <pre id="output"></pre>
+
+  <script>
+    const output = document.getElementById('output');
+
+    async function testAddress() {
+      output.textContent = 'Fetching address for Pendleton, SC (34.67, -82.48)...\n';
+      
+      try {
+        const url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=34.67&lon=-82.48&zoom=18&addressdetails=1';
+        const response = await fetch(url, {
+          headers: { 'User-Agent': 'AccessAtlas/1.0' }
+        });
+        
+        output.textContent += `Status: ${response.status}\n`;
+        
+        const data = await response.json();
+        output.textContent += `\nFull Response:\n${JSON.stringify(data, null, 2)}\n`;
+        output.textContent += `\nDisplay Name: ${data.display_name}\n`;
+      } catch (error) {
+        output.textContent += `\nError: ${error.message}\n`;
+      }
+    }
+
+    function checkOfflineMode() {
+      const isOffline = localStorage.getItem('offline_mode_enabled');
+      output.textContent = `Offline mode: ${isOffline}\n`;
+      if (isOffline === 'true') {
+        output.textContent += '\n⚠️ OFFLINE MODE IS ENABLED - This prevents address fetching!\n';
+        output.textContent += 'Go to Settings and turn off Offline Mode.\n';
+      } else {
+        output.textContent += '\n✅ Offline mode is disabled - addresses should fetch.\n';
+      }
+    }
+
+    function clearTags() {
+      localStorage.removeItem('accessibility_tags');
+      localStorage.removeItem('tagging-map-tags');
+      output.textContent = '✅ All tags cleared from localStorage.\nRefresh the app and try adding a new tag.\n';
+    }
+
+    function showTags() {
+      const tags = localStorage.getItem('accessibility_tags');
+      output.textContent = 'Stored tags:\n\n';
+      if (tags) {
+        const parsed = JSON.parse(tags);
+        output.textContent += JSON.stringify(parsed, null, 2);
+      } else {
+        output.textContent += 'No tags found.';
+      }
+    }
+  </script>
+</body>
+</html>

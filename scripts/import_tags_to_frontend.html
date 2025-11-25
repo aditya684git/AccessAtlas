@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Import Tags to AccessAtlas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196F3;
+        }
+        .warning {
+            background: #fff3e0;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #ff9800;
+        }
+        .success {
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4caf50;
+        }
+        .error {
+            background: #ffebee;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #f44336;
+        }
+        button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background: #1976D2;
+        }
+        button.danger {
+            background: #f44336;
+        }
+        button.danger:hover {
+            background: #d32f2f;
+        }
+        button.secondary {
+            background: #757575;
+        }
+        button.secondary:hover {
+            background: #616161;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .stat-card {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2196F3;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            max-height: 300px;
+        }
+        .button-group {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📍 Import Tags to AccessAtlas</h1>
+        
+        <div class="info">
+            <strong>Instructions:</strong>
+            <ol>
+                <li>Make sure your AccessAtlas frontend is running at <code>http://localhost:8080</code></li>
+                <li>Click "Import Model Predictions" to load 23 AI-generated tags</li>
+                <li>Click "Import OSM Tags" to load 1 real OSM feature</li>
+                <li>Open the map to see all tags with colored borders (Yellow=model, Blue=OSM)</li>
+            </ol>
+        </div>
+
+        <div id="status"></div>
+
+        <div class="button-group">
+            <button onclick="importModelTags()">🤖 Import Model Predictions (23)</button>
+            <button onclick="importOSMTags()">🗺️ Import OSM Tags (1)</button>
+            <button onclick="importAllTags()">⚡ Import All Tags (24)</button>
+        </div>
+
+        <div class="button-group">
+            <button class="secondary" onclick="showCurrentTags()">👁️ View Current Tags</button>
+            <button class="danger" onclick="clearAllTags()">🗑️ Clear All Tags</button>
+        </div>
+
+        <div id="current-stats"></div>
+        <div id="preview"></div>
+    </div>
+
+    <script>
+        const modelPredictionsData = [
+  {
+    "id": "model-0",
+    "type": "Elevator",
+    "lat": 34.706498,
+    "lon": -82.491007,
+    "source": "model",
+    "confidence": 0.523,
+    "timestamp": null,
+    "image_path": "VizWiz_test_000000021259.jpg"
+  },
+  {
+    "id": "model-1",
+    "type": "Entrance",
+    "lat": 34.642019,
+    "lon": -82.442431,
+    "source": "model",
+    "confidence": 0.712,
+    "timestamp": null,
+    "image_path": "VizWiz_val_000000030681.jpg"
+  },
+  {
+    "id": "model-2",
+    "type": "Ramp",
+    "lat": 34.663177,
+    "lon": -82.482516,
+    "source": "model",
+    "confidence": 0.563,
+    "timestamp": null,
+    "image_path": "VizWiz_train_000000019786.jpg"
+  },
+  {
+    "id": "model-3",
+    "type": "Obstacle",
+    "lat": 34.682413,
+    "lon": -82.435777,
+    "source": "model",
+    "confidence": 0.918,
+    "timestamp": null,
+    "image_path": "VizWiz_train_000000011484.jpg"
+  },
+  {
+    "id": "model-4",
+    "type": "Obstacle",
+    "lat": 34.703009,
+    "lon": -82.486872,
+    "source": "model",
+    "confidence": 0.825,
+    "timestamp": null,
+    "image_path": "VizWiz_train_000000001349.jpg"
+  },
+  {
+    "id": "model-5",
+    "type": "Obstacle",
+    "lat": 34.685994,
+    "lon": -82.508882,
+    "source": "model",
+    "confidence": 0.802,
+    "timestamp": null,
+    "image_path": "VizWiz_test_000000025830.jpg"
+  },
+  {
+    "id": "model-6",
+    "type": "Obstacle",
+    "lat": 34.674291,
+    "lon": -82.463001,
+    "source": "model",
+    "confidence": 0.744,
+    "timestamp": null,
+    "image_path": "VizWiz_test_000000022831.jpg"
+  },
+  {
+    "id": "model-7",
+    "type": "Ramp",
+    "lat": 34.689651,
+    "lon": -82.456952,
+    "source": "model",
+    "confidence": 0.681,
+    "timestamp": null,
+    "image_path": "VizWiz_train_000000019003.jpg"
+  },
+  {
+    "id": "model-8",
+    "type": "Elevator",
+    "lat": 34.691868,
+    "lon": -82.467085,
+    "source": "model",
+    "confidence": 0.515,
+    "timestamp": null,
+    "image_path": "VizWiz_train_000000010767.jpg"
+  },
+  {
+    "id": "model-9",
+    "type": "Ramp",
+    "lat": 34.659863,
+    "lon": -82.504653,
+    "source": "model",
+    "confidence": 0.6,
+    "timestamp": null,
+    "image_path": "VizWiz_train_000000006076.jpg"
+  },
+  {
+    "id": "model-10",
+    "type": "Ramp",
+    "lat": 34.700296,
+    "lon": -82.465882,
+    "source": "model",
+    "confidence": 0.653,
+    "timestamp": null,
+    "image_path": "VizWiz_train_000000017076.jpg"
+  },
+  {
+    "id": "model-11",
+    "type": "Entrance",
+    "lat": 34.653803,
+    "lon": -82.489056,
+    "source": "model",
+    "confidence": 0.631,
+    "timestamp": null,
+    "image_path": "VizWiz_train_000000013863.jpg"
+  },
+  {
+    "id": "model-12",
+    "type": "Obstacle",
+    "lat": 34.634824,
+    "lon": -82.440813,
+    "source": "model",
+    "confidence": 0.758,
+    "timestamp": null,
+    "image_path": "VizWiz_train_000000001544.jpg"
+  },
+  {
+    "id": "model-13",
+    "type": "Entrance",
+    "lat": 34.67963,
+    "lon": -82.513879,
+    "source": "model",
+    "confidence": 0.622,
+    "timestamp": null,
+    "image_path": "VizWiz_test_000000021008.jpg"
+  },
+  {
+    "id": "model-14",
+    "type": "Ramp",
+    "lat": 34.688014,
+    "lon": -82.458046,
+    "source": "model",
+    "confidence": 0.644,
+    "timestamp": null,
+    "image_path": "VizWiz_train_000000011685.jpg"
+  },
+  {
+    "id": "model-15",
+    "type": "Entrance",
+    "lat": 34.712618,
+    "lon": -82.460629,
+    "source": "model",
+    "confidence": 0.601,
+    "timestamp": null,
+    "image_path": "VizWiz_train_000000005493.jpg"
+  },
+  {
+    "id": "model-16",
+    "type": "Obstacle",
+    "lat": 34.668969,
+    "lon": -82.442945,
+    "source": "model",
+    "confidence": 0.67,
+    "timestamp": null,
+    "image_path": "VizWiz_train_000000017889.jpg"
+  },
+  {
+    "id": "model-17",
+    "type": "Obstacle",
+    "lat": 34.691085,
+    "lon": -82.502032,
+    "source": "model",
+    "confidence": 0.863,
+    "timestamp": null,
+    "image_path": "VizWiz_test_000000027450.jpg"
+  },
+  {
+    "id": "model-18",
+    "type": "Ramp",
+    "lat": 34.705844,
+    "lon": -82.517479,
+    "source": "model",
+    "confidence": 0.719,
+    "timestamp": null,
+    "image_path": "VizWiz_train_000000011166.jpg"
+  },
+  {
+    "id": "model-19",
+    "type": "Ramp",
+    "lat": 34.632363,
+    "lon": -82.448001,
+    "source": "model",
+    "confidence": 0.572,
+    "timestamp": null,
+    "image_path": "VizWiz_train_000000004563.jpg"
+  },
+  {
+    "id": "model-20",
+    "type": "Elevator",
+    "lat": 34.708736,
+    "lon": -82.501903,
+    "source": "model",
+    "confidence": 0.529,
+    "timestamp": null,
+    "image_path": "VizWiz_test_000000025277.jpg"
+  },
+  {
+    "id": "model-21",
+    "type": "Obstacle",
+    "lat": 34.654479,
+    "lon": -82.441697,
+    "source": "model",
+    "confidence": 0.758,
+    "timestamp": null,
+    "image_path": "VizWiz_train_000000018481.jpg"
+  },
+  {
+    "id": "model-22",
+    "type": "Obstacle",
+    "lat": 34.645002,
+    "lon": -82.468821,
+    "source": "model",
+    "confidence": 0.786,
+    "timestamp": null,
+    "image_path": "VizWiz_test_000000023917.jpg"
+  }
+];
+
+        const osmTagsData = [
+  {
+    "id": "osm-4057393952",
+    "type": "Entrance",
+    "lat": 34.642877,
+    "lon": -82.437252,
+    "source": "osm",
+    "osmId": 4057393952,
+    "timestamp": null,
+    "readonly": true
+  }
+];
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = type;
+            statusDiv.innerHTML = message;
+        }
+
+        function getCurrentTags() {
+            const tagsJson = localStorage.getItem('accessibility_tags');
+            return tagsJson ? JSON.parse(tagsJson) : [];
+        }
+
+        function saveTags(tags) {
+            localStorage.setItem('accessibility_tags', JSON.stringify(tags));
+        }
+
+        function addTimestamps(tags) {
+            const now = new Date().toISOString();
+            return tags.map(tag => ({
+                ...tag,
+                timestamp: tag.timestamp || now
+            }));
+        }
+
+        function importModelTags() {
+            const currentTags = getCurrentTags();
+            const tagsWithTimestamps = addTimestamps(modelPredictionsData);
+            
+            // Remove any existing model tags
+            const nonModelTags = currentTags.filter(t => t.source !== 'model');
+            
+            // Add new model tags
+            const allTags = [...nonModelTags, ...tagsWithTimestamps];
+            saveTags(allTags);
+            
+            showStatus(`✅ Successfully imported ${tagsWithTimestamps.length} model predictions!<br>
+                        🔄 Refresh your map at <a href="http://localhost:8080" target="_blank">localhost:8080</a> to see them.`, 'success');
+            updateStats();
+        }
+
+        function importOSMTags() {
+            const currentTags = getCurrentTags();
+            const tagsWithTimestamps = addTimestamps(osmTagsData);
+            
+            // Remove any existing OSM tags
+            const nonOSMTags = currentTags.filter(t => t.source !== 'osm');
+            
+            // Add new OSM tags
+            const allTags = [...nonOSMTags, ...tagsWithTimestamps];
+            saveTags(allTags);
+            
+            showStatus(`✅ Successfully imported ${tagsWithTimestamps.length} OSM tag(s)!<br>
+                        🔄 Refresh your map at <a href="http://localhost:8080" target="_blank">localhost:8080</a> to see them.`, 'success');
+            updateStats();
+        }
+
+        function importAllTags() {
+            const currentTags = getCurrentTags();
+            const modelTagsWithTimestamps = addTimestamps(modelPredictionsData);
+            const osmTagsWithTimestamps = addTimestamps(osmTagsData);
+            
+            // Remove existing model and OSM tags
+            const userTags = currentTags.filter(t => t.source === 'user');
+            
+            // Add all new tags
+            const allTags = [...userTags, ...modelTagsWithTimestamps, ...osmTagsWithTimestamps];
+            saveTags(allTags);
+            
+            showStatus(`✅ Successfully imported ${modelTagsWithTimestamps.length + osmTagsWithTimestamps.length} tags!<br>
+                        📊 Model: ${modelTagsWithTimestamps.length}, OSM: ${osmTagsWithTimestamps.length}<br>
+                        🔄 Refresh your map at <a href="http://localhost:8080" target="_blank">localhost:8080</a> to see them.`, 'success');
+            updateStats();
+        }
+
+        function clearAllTags() {
+            if (confirm('Are you sure you want to clear ALL tags (including user tags)?')) {
+                localStorage.removeItem('accessibility_tags');
+                showStatus('🗑️ All tags cleared from localStorage.', 'warning');
+                updateStats();
+            }
+        }
+
+        function showCurrentTags() {
+            const tags = getCurrentTags();
+            const preview = document.getElementById('preview');
+            
+            if (tags.length === 0) {
+                preview.innerHTML = '<div class="info">No tags found in localStorage.</div>';
+                return;
+            }
+
+            // Count by source
+            const counts = {
+                user: tags.filter(t => t.source === 'user').length,
+                model: tags.filter(t => t.source === 'model').length,
+                osm: tags.filter(t => t.source === 'osm').length
+            };
+
+            preview.innerHTML = `
+                <h3>Current Tags (${tags.length} total)</h3>
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-number" style="color: #22c55e">${counts.user}</div>
+                        <div class="stat-label">User Tags</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" style="color: #eab308">${counts.model}</div>
+                        <div class="stat-label">Model Tags</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" style="color: #3b82f6">${counts.osm}</div>
+                        <div class="stat-label">OSM Tags</div>
+                    </div>
+                </div>
+                <pre>${JSON.stringify(tags.slice(0, 5), null, 2)}${tags.length > 5 ? '\n... (showing first 5)' : ''}</pre>
+            `;
+            updateStats();
+        }
+
+        function updateStats() {
+            const tags = getCurrentTags();
+            const statsDiv = document.getElementById('current-stats');
+            
+            if (tags.length === 0) {
+                statsDiv.innerHTML = '';
+                return;
+            }
+
+            const counts = {
+                user: tags.filter(t => t.source === 'user').length,
+                model: tags.filter(t => t.source === 'model').length,
+                osm: tags.filter(t => t.source === 'osm').length
+            };
+
+            statsDiv.innerHTML = `
+                <div class="info" style="margin-top: 20px;">
+                    <strong>Current localStorage:</strong> ${tags.length} total tags
+                    (👤 User: ${counts.user}, 🤖 Model: ${counts.model}, 🗺️ OSM: ${counts.osm})
+                </div>
+            `;
+        }
+
+        // Show current stats on page load
+        updateStats();
+    </script>
+</body>
+</html>
