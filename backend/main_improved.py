@@ -61,7 +61,8 @@ try:
     from PIL import Image
     import io
     import threading
-    import pyttsx3 if config.ENABLE_TTS else None
+    if config.ENABLE_TTS:
+        import pyttsx3
     
     logger.info("ML dependencies imported successfully")
     
@@ -111,6 +112,8 @@ def speak(text: str):
         return
     
     try:
+        import pyttsx3
+        
         def run():
             try:
                 engine = pyttsx3.init()
@@ -120,6 +123,8 @@ def speak(text: str):
                 logger.error(f"TTS playback error: {e}")
         
         threading.Thread(target=run, daemon=True).start()
+    except ImportError:
+        logger.warning("pyttsx3 not available for TTS")
     except Exception as e:
         logger.error(f"Failed to spawn TTS thread: {e}")
 

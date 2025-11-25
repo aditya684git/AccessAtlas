@@ -65,7 +65,9 @@ class APICache {
     // Evict oldest entry if cache is full
     if (this.cache.size >= this.maxSize) {
       const firstKey = this.cache.keys().next().value;
-      this.cache.delete(firstKey);
+      if (firstKey) {
+        this.cache.delete(firstKey);
+      }
     }
 
     this.cache.set(key, {
@@ -180,7 +182,20 @@ export async function cachedFetch<T>(
 /**
  * Local fallback data for offline mode
  */
-export const fallbackData = {
+interface FallbackTag {
+  id: string;
+  type: 'ramp' | 'elevator' | 'tactile_path' | 'entrance' | 'obstacle';
+  lat: number;
+  lon: number;
+  source: 'osm';
+  address: string;
+  readonly: boolean;
+}
+
+export const fallbackData: {
+  sampleTags: FallbackTag[];
+  getTagsNearby(lat: number, lon: number, radius?: number): FallbackTag[];
+} = {
   /**
    * Sample accessibility tags for offline demo
    */
