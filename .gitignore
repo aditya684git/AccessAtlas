@@ -18,7 +18,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+lib/  # Python distribution packages
+!frontend/src/lib/  # Allow frontend lib folder
 lib64/
 parts/
 sdist/
@@ -186,10 +187,13 @@ frontend/build/
 Thumbs.db
 
 # === Model files (too large for git) ===
-*.pt
+# *.pt  # COMMENTED: yolov5su.pt is only 17.7MB, safe for git
 *.pth
 *.onnx
 *.weights
+
+# Exception: Allow specific model file for deployment
+!backend/yolov5su.pt
 
 # === Data files ===
 archive/
@@ -201,6 +205,7 @@ data/test/
 !package.json
 !package-lock.json
 !tsconfig.json
+!frontend/public/data/*.json  # Allow frontend fallback data
 
 # === YOLOv5 runs ===
 yolov5/runs/

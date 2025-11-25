@@ -1,0 +1,49 @@
+{
+  "addresses": [
+    {
+      "road": "Main Street",
+      "city": "Demo City",
+      "state": "CA",
+      "country": "USA",
+      "display_name": "Main Street, Demo City, CA, USA"
+    }
+  ],
+  "features": [
+    {
+      "type": "node",
+      "id": 1001,
+      "lat": 37.7749,
+      "lon": -122.4194,
+      "tags": {
+        "ramp": "yes",
+        "wheelchair": "yes",
+        "name": "Accessible Ramp (Demo)"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1002,
+      "lat": 37.7750,
+      "lon": -122.4195,
+      "tags": {
+        "highway": "elevator",
+        "wheelchair": "yes",
+        "name": "Elevator (Demo)"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1003,
+      "lat": 37.7751,
+      "lon": -122.4196,
+      "tags": {
+        "tactile_paving": "yes",
+        "name": "Tactile Paving (Demo)"
+      }
+    }
+  ],
+  "metadata": {
+    "note": "This is fallback data for offline/demo mode",
+    "last_updated": "2025-11-25"
+  }
+}
