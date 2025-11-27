@@ -13,7 +13,8 @@ numpy>=1.24.0,<2.0.0      # NumPy (required by torch/ultralytics)
 pillow==10.1.0            # Image processing
 
 ## Voice & Accessibility
-pyttsx3==2.90             # Text-to-speech (Windows, macOS, Linux support)
+gTTS==2.5.0               # Google Text-to-Speech (web-compatible, no system deps)
+pyttsx3==2.90             # Text-to-speech fallback (Windows, macOS, Linux support)
 
 ## Optional: Development
 pytest==7.4.3             # Testing framework

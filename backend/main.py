@@ -1,9 +1,11 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import time
 import logging
 import os
+import uuid
+import tempfile
 from pathlib import Path
 
 # Configure logging with better formatting
@@ -51,14 +53,22 @@ try:
     
     logger.info(f"ML stack loaded - PyTorch {torch.__version__}, NumPy {np.__version__}")
     
-    # Optional TTS
+    # Optional TTS - try gTTS first (better for web), fallback to pyttsx3
     try:
-        import pyttsx3  # type: ignore
+        from gtts import gTTS  # type: ignore
         _HAS_TTS = True
-        logger.info("TTS (pyttsx3) available")
+        _TTS_ENGINE = "gtts"
+        logger.info("TTS (gTTS) available - web-compatible MP3 generation")
     except ImportError:
-        logger.warning("pyttsx3 not available, TTS disabled")
-        _HAS_TTS = False
+        try:
+            import pyttsx3  # type: ignore
+            _HAS_TTS = True
+            _TTS_ENGINE = "pyttsx3"
+            logger.info("TTS (pyttsx3) available - local audio playback")
+        except ImportError:
+            logger.warning("No TTS libraries available (gTTS or pyttsx3), TTS disabled")
+            _HAS_TTS = False
+            _TTS_ENGINE = None
 
     logger.info("Attempting to load YOLOv5 model...")
     
@@ -99,11 +109,13 @@ except ImportError as e:
     logger.warning("Running in FALLBACK mode - mock responses only")
     _HAS_FULL_STACK = False
     _HAS_TTS = False
+    _TTS_ENGINE = None
     model = None
 except Exception as e:
     logger.error(f"Failed to initialize ML stack: {e}", exc_info=True)
     _HAS_FULL_STACK = False
     _HAS_TTS = False
+    _TTS_ENGINE = None
     model = None
 
 
@@ -311,14 +323,198 @@ async def detect(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 
-@app.post("/voice")
-async def voice(text: str):
-    """Text-to-speech endpoint"""
+@app.get("/voice")
+async def generate_voice(text: str = Query(..., min_length=1, max_length=500, description="Text to convert to speech")):
+    """
+    Text-to-speech endpoint that generates and returns an MP3 file.
+    
+    Args:
+        text: Text to convert to speech (1-500 characters)
+    
+    Returns:
+        FileResponse: Downloadable MP3 audio file
+    
+    Raises:
+        HTTPException 400: Invalid text input
+        HTTPException 503: TTS service unavailable
+        HTTPException 500: Audio generation failed
+    """
+    # Validate input
+    if not text or text.strip() == "":
+        raise HTTPException(status_code=400, detail="Text cannot be empty")
+    
+    text = text.strip()
+    logger.info(f"[VOICE] Generating speech for: '{text[:50]}...' ({len(text)} chars)")
+    
+    # Check TTS availability
+    if not _HAS_TTS:
+        raise HTTPException(
+            status_code=503,
+            detail="TTS service unavailable. Install gtts or pyttsx3: pip install gtts"
+        )
+    
+    try:
+        # Generate unique filename to avoid collisions
+        unique_id = uuid.uuid4().hex[:8]
+        timestamp = int(time.time())
+        filename = f"speech_{timestamp}_{unique_id}.mp3"
+        
+        # Use temp directory for audio files
+        temp_dir = Path(tempfile.gettempdir()) / "accessatlas_audio"
+        temp_dir.mkdir(exist_ok=True)
+        audio_path = temp_dir / filename
+        
+        # Generate audio based on available engine
+        if _TTS_ENGINE == "gtts":
+            # Use gTTS (Google Text-to-Speech) - pure Python, generates MP3
+            try:
+                from gtts import gTTS
+                
+                # Create TTS object with optimized settings
+                tts = gTTS(
+                    text=text,
+                    lang='en',  # English language
+                    slow=False,  # Normal speed
+                    tld='com'  # Use google.com (US accent)
+                )
+                
+                # Save to file
+                tts.save(str(audio_path))
+                logger.info(f"[VOICE] Audio generated with gTTS: {audio_path} ({audio_path.stat().st_size} bytes)")
+                
+            except Exception as e:
+                logger.error(f"gTTS generation failed: {e}", exc_info=True)
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Audio generation failed: {str(e)}"
+                )
+        
+        elif _TTS_ENGINE == "pyttsx3":
+            # Fallback to pyttsx3 (requires system TTS, saves to file)
+            try:
+                import pyttsx3
+                
+                engine = pyttsx3.init()
+                engine.setProperty('rate', 150)  # Speed (words per minute)
+                engine.setProperty('volume', 1.0)  # Volume (0.0 to 1.0)
+                
+                # Save to file (pyttsx3 supports wav/mp3 depending on system)
+                # Note: pyttsx3.save_to_file may not work on all platforms
+                engine.save_to_file(text, str(audio_path))
+                engine.runAndWait()
+                
+                # Check if file was created
+                if not audio_path.exists() or audio_path.stat().st_size == 0:
+                    raise Exception("pyttsx3 failed to generate audio file")
+                
+                logger.info(f"[VOICE] Audio generated with pyttsx3: {audio_path}")
+                
+            except Exception as e:
+                logger.error(f"pyttsx3 generation failed: {e}", exc_info=True)
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Audio generation failed with pyttsx3: {str(e)}. Try installing gtts: pip install gtts"
+                )
+        
+        else:
+            raise HTTPException(status_code=503, detail="No TTS engine available")
+        
+        # Verify file was created successfully
+        if not audio_path.exists():
+            raise HTTPException(
+                status_code=500,
+                detail="Audio file generation failed - file not created"
+            )
+        
+        file_size = audio_path.stat().st_size
+        if file_size == 0:
+            audio_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=500,
+                detail="Audio file generation failed - empty file"
+            )
+        
+        logger.info(f"[VOICE] Serving audio file: {filename} ({file_size} bytes)")
+        
+        # Return file as downloadable response
+        # Note: FileResponse with background task will auto-delete after serving
+        return FileResponse(
+            path=str(audio_path),
+            media_type="audio/mpeg",
+            filename=filename,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            },
+            background=None  # Don't auto-delete; cleanup happens via separate task
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in /voice: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error generating audio: {str(e)}"
+        )
+
+
+@app.post("/voice/speak")
+async def voice_speak(text: str = Query(..., min_length=1, max_length=500)):
+    """
+    Legacy endpoint for immediate audio playback (non-blocking).
+    Use /voice for downloadable MP3 files instead.
+    """
     if not text or text.strip() == "":
         raise HTTPException(status_code=400, detail="Text cannot be empty")
     
     speak(text)
-    return JSONResponse(status_code=200, content={"status": "speaking", "text": text})
+    return JSONResponse(status_code=200, content={
+        "status": "speaking",
+        "text": text,
+        "note": "Use GET /voice?text=... for downloadable MP3 files"
+    })
+
+
+@app.delete("/voice/cleanup")
+async def cleanup_audio_files():
+    """
+    Cleanup old temporary audio files (older than 1 hour).
+    Called automatically or manually to free up disk space.
+    """
+    try:
+        temp_dir = Path(tempfile.gettempdir()) / "accessatlas_audio"
+        if not temp_dir.exists():
+            return JSONResponse(content={"status": "ok", "cleaned": 0, "message": "No temp directory"})
+        
+        cleaned_count = 0
+        cleaned_size = 0
+        current_time = time.time()
+        
+        for audio_file in temp_dir.glob("speech_*.mp3"):
+            try:
+                # Remove files older than 1 hour
+                file_age = current_time - audio_file.stat().st_mtime
+                if file_age > 3600:  # 1 hour in seconds
+                    file_size = audio_file.stat().st_size
+                    audio_file.unlink()
+                    cleaned_count += 1
+                    cleaned_size += file_size
+                    logger.info(f"[CLEANUP] Removed old audio file: {audio_file.name}")
+            except Exception as e:
+                logger.warning(f"Failed to remove {audio_file}: {e}")
+        
+        return JSONResponse(content={
+            "status": "ok",
+            "cleaned": cleaned_count,
+            "size_freed_mb": round(cleaned_size / (1024 * 1024), 2),
+            "message": f"Cleaned {cleaned_count} old audio files"
+        })
+    except Exception as e:
+        logger.error(f"Cleanup failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
 
 
 @app.get("/models")
