@@ -5,6 +5,10 @@ fastapi==0.104.1          # Web framework
 uvicorn==0.24.0           # ASGI server
 python-multipart==0.0.6   # File upload support
 
+## Database
+sqlalchemy==2.0.36        # ORM for database operations (Python 3.13 compatible)
+alembic==1.13.0           # Database migrations (optional, for schema changes)
+
 ## ML/CV
 ultralytics==8.0.200      # YOLOv5 implementation
 torch==2.1.0              # PyTorch (CPU version, use torch.org for GPU)

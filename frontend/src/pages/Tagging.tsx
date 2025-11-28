@@ -18,8 +18,7 @@ import { Plus, Mic, MicOff, Navigation, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "../hooks/use-toast";
 import { useNavigation } from "../contexts/NavigationContext";
 import type { Tag as MapTag } from "../types/tag";
-import { sendImage } from "../lib/api";
-import { fetchAccessibilityFeatures } from "../lib/osmApi";
+import { fetchAccessibilityFeatures, mapOSMTagToType } from "../lib/osmApi";
 
 interface Tag {
   id: string;
@@ -40,7 +39,6 @@ const Tagging = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [showVoicePanel, setShowVoicePanel] = useState(false);
   const [selectedTag, setSelectedTag] = useState<MapTag | null>(null);
-  const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedTags, setGeneratedTags] = useState<{
     osmTags: MapTag[];
@@ -160,17 +158,15 @@ const Tagging = () => {
   };
 
   /**
-   * Generate tags from OSM and Model detection
-   * Integrates with backend /detect endpoint and OSM API
+   * Generate tags from OSM accessibility features
+   * Fetches real-world accessibility data from OpenStreetMap
    */
   const handleGenerateTags = async () => {
     setIsGenerating(true);
     const osmTagsResult: MapTag[] = [];
-    const modelTagsResult: MapTag[] = [];
 
     try {
       // Get current map center for OSM query
-      // Dispatch event to get map center from TaggingMap component
       const mapCenterPromise = new Promise<{ lat: number; lon: number }>((resolve) => {
         const handler = (e: any) => {
           resolve(e.detail);
@@ -188,7 +184,7 @@ const Tagging = () => {
 
       const mapCenter = await mapCenterPromise;
 
-      // 1. Fetch OSM accessibility features
+      // Fetch OSM accessibility features
       toast({
         title: "Generating Tags",
         description: "Fetching OSM accessibility features...",
@@ -197,24 +193,17 @@ const Tagging = () => {
       try {
         const osmElements = await fetchAccessibilityFeatures(mapCenter.lat, mapCenter.lon, 500);
         
+        console.log('OSM Elements received:', osmElements.length);
+        
         // Map OSM elements to tags
         const osmTags = osmElements
           .map((el): MapTag | null => {
-            // Map OSM tags to our tag types
-            let type: MapTag['type'] = 'Entrance';
+            // Map OSM tags to our tag types using the helper function
+            const type = mapOSMTagToType(el.tags);
             
-            if (el.tags.wheelchair === 'yes' || el.tags.ramp === 'yes') {
-              type = 'Ramp';
-            } else if (el.tags.highway === 'steps' && el.tags.ramp === 'yes') {
-              type = 'Ramp';
-            } else if (el.tags.amenity === 'elevator' || el.tags.highway === 'elevator') {
-              type = 'Elevator';
-            } else if (el.tags.tactile_paving === 'yes') {
-              type = 'Tactile Path';
-            } else if (el.tags.entrance) {
-              type = 'Entrance';
-            } else if (el.tags.barrier || el.tags.obstacle) {
-              type = 'Obstacle';
+            if (!type) {
+              console.log('No type mapping for OSM element:', el.tags);
+              return null;
             }
 
             return {
@@ -226,103 +215,55 @@ const Tagging = () => {
               source: 'osm',
               osmId: el.id,
               readonly: true,
-              address: el.tags.name || el.tags['addr:street'],
+              address: el.tags.name || el.tags['addr:street'] || 'OSM Feature',
             };
           })
           .filter((t): t is MapTag => t !== null);
 
         osmTagsResult.push(...osmTags);
         
-        toast({
-          title: "OSM Tags Loaded",
-          description: `Found ${osmTags.length} accessibility features`,
-        });
+        console.log('OSM Tags created:', osmTags.length);
+        
+        if (osmTags.length > 0) {
+          toast({
+            title: "OSM Tags Loaded",
+            description: `Found ${osmTags.length} accessibility features`,
+          });
+        } else {
+          toast({
+            title: "No OSM Features Found",
+            description: "Try moving the map to a different location with more accessibility data",
+            variant: "destructive",
+          });
+        }
       } catch (error) {
         console.error('OSM fetch error:', error);
         toast({
           title: "OSM Fetch Failed",
-          description: "Could not load OSM features. Continuing with model detection.",
+          description: "Could not load OSM features. Please check your internet connection.",
           variant: "destructive",
         });
       }
 
-      // 2. If image is selected, call model detection endpoint
-      if (selectedImage) {
-        toast({
-          title: "Generating Tags",
-          description: "Running ML model detection...",
-        });
-
-        try {
-          const detectResponse = await sendImage(selectedImage);
-          
-          // Convert detections to tags at map center with slight offsets
-          const modelTags = detectResponse.detections.map((detection, index) => {
-            // Offset tags slightly to avoid overlap
-            const offsetLat = mapCenter.lat + (Math.random() - 0.5) * 0.001;
-            const offsetLon = mapCenter.lon + (Math.random() - 0.5) * 0.001;
-            
-            // Map detection labels to tag types
-            let type: MapTag['type'] = 'Obstacle';
-            const label = detection.label.toLowerCase();
-            
-            if (label.includes('ramp') || label.includes('wheelchair')) {
-              type = 'Ramp';
-            } else if (label.includes('elevator') || label.includes('lift')) {
-              type = 'Elevator';
-            } else if (label.includes('door') || label.includes('entrance')) {
-              type = 'Entrance';
-            } else if (label.includes('path') || label.includes('tactile')) {
-              type = 'Tactile Path';
-            }
-
-            return {
-              id: `model-${Date.now()}-${index}`,
-              type,
-              lat: offsetLat,
-              lon: offsetLon,
-              timestamp: new Date().toISOString(),
-              source: 'model' as const,
-              confidence: detection.confidence,
-              address: `Detected: ${detection.label} (${detection.position})`,
-            };
-          });
-
-          modelTagsResult.push(...modelTags);
-          
-          toast({
-            title: "Model Tags Generated",
-            description: `Detected ${modelTags.length} objects with AI`,
-          });
-        } catch (error) {
-          console.error('Model detection error:', error);
-          toast({
-            title: "Model Detection Failed",
-            description: error instanceof Error ? error.message : "Could not run model detection",
-            variant: "destructive",
-          });
-        }
-      }
-
-      // Update state with all generated tags
+      // Update state with generated tags
       setGeneratedTags({
         osmTags: osmTagsResult,
-        modelTags: modelTagsResult,
+        modelTags: [],
       });
 
       // Dispatch event to add tags to map
-      window.dispatchEvent(new CustomEvent('addGeneratedTags', {
-        detail: {
-          tags: [...osmTagsResult, ...modelTagsResult]
-        }
-      }));
+      if (osmTagsResult.length > 0) {
+        window.dispatchEvent(new CustomEvent('addGeneratedTags', {
+          detail: {
+            tags: osmTagsResult
+          }
+        }));
 
-      // Show success message
-      const totalTags = osmTagsResult.length + modelTagsResult.length;
-      toast({
-        title: "Tags Generated Successfully!",
-        description: `Added ${totalTags} tags (${osmTagsResult.length} OSM, ${modelTagsResult.length} Model)`,
-      });
+        toast({
+          title: "Tags Generated Successfully!",
+          description: `Added ${osmTagsResult.length} OSM accessibility tags`,
+        });
+      }
 
     } catch (error) {
       console.error('Generate tags error:', error);
@@ -333,28 +274,6 @@ const Tagging = () => {
       });
     } finally {
       setIsGenerating(false);
-    }
-  };
-
-  /**
-   * Handle image file selection
-   */
-  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      if (!file.type.startsWith('image/')) {
-        toast({
-          title: "Invalid File",
-          description: "Please select an image file",
-          variant: "destructive",
-        });
-        return;
-      }
-      setSelectedImage(file);
-      toast({
-        title: "Image Selected",
-        description: `${file.name} ready for detection`,
-      });
     }
   };
 
@@ -411,36 +330,14 @@ const Tagging = () => {
           </Button>
         </div>
 
-        {/* Generate Tags Panel */}
-        <div className="absolute top-4 right-4 z-[1000] max-w-sm">
+        {/* Generate Tags Panel - positioned on left side to avoid debug button */}
+        <div className="absolute top-4 left-4 z-[1000] max-w-sm">
           <div className="bg-white rounded-lg shadow-lg p-4 space-y-3">
             <h3 className="font-semibold text-lg flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-purple-600" />
               Generate Tags
             </h3>
             
-            {/* Image Upload */}
-            <div>
-              <label 
-                htmlFor="image-upload" 
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Select Image (Optional)
-              </label>
-              <input
-                id="image-upload"
-                type="file"
-                accept="image/*"
-                onChange={handleImageSelect}
-                className="block w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-              />
-              {selectedImage && (
-                <p className="text-xs text-gray-500 mt-1">
-                  ✓ {selectedImage.name}
-                </p>
-              )}
-            </div>
-
             {/* Generate Button */}
             <Button
               onClick={handleGenerateTags}

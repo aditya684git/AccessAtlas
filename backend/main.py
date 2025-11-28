@@ -19,9 +19,16 @@ logger = logging.getLogger(__name__)
 # Create FastAPI app
 app = FastAPI(
     title="AccessAtlas Backend",
-    description="YOLOv5 Object Detection API with Voice Feedback (fallback-capable)",
-    version="1.0.0"
+    description="YOLOv5 Object Detection API with Voice Feedback and Tag Storage",
+    version="2.0.0"
 )
+
+# Import database initialization
+from database import init_db
+from tags_api import router as tags_router
+
+# Include tags router
+app.include_router(tags_router)
 
 # CORS configuration - get from environment or use defaults
 CORS_ORIGINS = os.getenv(
@@ -136,6 +143,14 @@ def speak(text: str):
             logger.error(f"Failed to spawn TTS thread: {e}")
     else:
         logger.info(f"[TTS] {text}")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup"""
+    logger.info("Initializing database...")
+    init_db()
+    logger.info("✓ Database initialized successfully")
 
 
 @app.get("/health")
