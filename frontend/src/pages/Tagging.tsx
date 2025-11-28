@@ -19,6 +19,7 @@ import { toast } from "../hooks/use-toast";
 import { useNavigation } from "../contexts/NavigationContext";
 import type { Tag as MapTag } from "../types/tag";
 import { fetchAccessibilityFeatures, mapOSMTagToType } from "../lib/osmApi";
+import { storeTags, getTags, type TagCreate } from "../lib/api";
 
 interface Tag {
   id: string;
@@ -44,6 +45,85 @@ const Tagging = () => {
     osmTags: MapTag[];
     modelTags: MapTag[];
   }>({ osmTags: [], modelTags: [] });
+
+  // Load saved tags on component mount
+  useEffect(() => {
+    const loadSavedTags = async () => {
+      try {
+        // Get current location name (you may want to make this dynamic)
+        const locationName = "Current Location";
+        
+        const response = await getTags(locationName);
+        
+        if (response.total_tags > 0) {
+          // Convert database tags to MapTag format
+          const allTags: MapTag[] = [];
+          
+          // Add OSM tags
+          response.tags.osm.forEach(tag => {
+            allTags.push({
+              id: `db-osm-${tag.id}`,
+              type: tag.tag_type as MapTag['type'],
+              lat: tag.lat,
+              lon: tag.lon,
+              timestamp: tag.created_at,
+              source: 'osm',
+              osmId: tag.osm_id ? parseInt(tag.osm_id.split('/')[1] || '0') : undefined,
+              readonly: true,
+              address: tag.address,
+            });
+          });
+
+          // Add user tags
+          response.tags.user.forEach(tag => {
+            allTags.push({
+              id: `db-user-${tag.id}`,
+              type: tag.tag_type as MapTag['type'],
+              lat: tag.lat,
+              lon: tag.lon,
+              timestamp: tag.created_at,
+              source: 'user',
+              readonly: false,
+              address: tag.address,
+            });
+          });
+
+          // Add model tags
+          response.tags.model.forEach(tag => {
+            allTags.push({
+              id: `db-model-${tag.id}`,
+              type: tag.tag_type as MapTag['type'],
+              lat: tag.lat,
+              lon: tag.lon,
+              timestamp: tag.created_at,
+              source: 'model',
+              confidence: tag.confidence,
+              readonly: true,
+              address: tag.address,
+            });
+          });
+
+          if (allTags.length > 0) {
+            // Dispatch event to load tags on map
+            window.dispatchEvent(new CustomEvent('addGeneratedTags', {
+              detail: { tags: allTags }
+            }));
+
+            console.log(`Loaded ${allTags.length} saved tags from database`);
+            toast({
+              title: "Tags Loaded",
+              description: `Loaded ${allTags.length} saved tags from database`,
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load saved tags:', error);
+        // Don't show error toast on mount - tags may not exist yet
+      }
+    };
+
+    loadSavedTags();
+  }, []);
 
   const handleAddTag = () => {
     if (newTag.trim()) {
@@ -259,10 +339,43 @@ const Tagging = () => {
           }
         }));
 
-        toast({
-          title: "Tags Generated Successfully!",
-          description: `Added ${osmTagsResult.length} OSM accessibility tags`,
-        });
+        // Save tags to database
+        try {
+          toast({
+            title: "Saving Tags",
+            description: "Storing tags to database...",
+          });
+
+          const tagsToStore: TagCreate[] = osmTagsResult.map(tag => ({
+            type: tag.type,
+            lat: tag.lat,
+            lon: tag.lon,
+            source: 'osm' as const,
+            address: tag.address,
+            osm_id: tag.osmId ? String(tag.osmId) : undefined,
+          }));
+
+          const storeResponse = await storeTags({
+            location_name: "Current Location",
+            lat: mapCenter.lat,
+            lon: mapCenter.lon,
+            tags: tagsToStore,
+          });
+
+          console.log('Tags stored:', storeResponse);
+
+          toast({
+            title: "Tags Saved Successfully!",
+            description: `Generated and saved ${osmTagsResult.length} OSM accessibility tags`,
+          });
+        } catch (storeError) {
+          console.error('Failed to store tags:', storeError);
+          toast({
+            title: "Tags Generated (Not Saved)",
+            description: `Added ${osmTagsResult.length} tags to map, but failed to save to database`,
+            variant: "destructive",
+          });
+        }
       }
 
     } catch (error) {

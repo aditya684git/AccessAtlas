@@ -158,3 +158,122 @@ export const healthCheck = async (): Promise<boolean> => {
     return false;
   }
 };
+
+/**
+ * Tags API - Types
+ */
+export interface TagCreate {
+  type: string;
+  lat: number;
+  lon: number;
+  source: 'user' | 'osm' | 'model';
+  address?: string;
+  confidence?: number;
+  osm_id?: string;
+  notes?: string;
+}
+
+export interface TagsStoreRequest {
+  location_name: string;
+  lat: number;
+  lon: number;
+  tags: TagCreate[];
+}
+
+export interface TagsStoreResponse {
+  success: boolean;
+  message: string;
+  location_name: string;
+  tags_stored: number;
+  tag_ids: number[];
+}
+
+export interface TagResponse {
+  id: number;
+  tag_type: string;
+  lat: number;
+  lon: number;
+  source: 'user' | 'osm' | 'model';
+  address?: string;
+  confidence?: number;
+  osm_id?: string;
+  notes?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface TagsGroupedResponse {
+  location_name: string;
+  lat: number;
+  lon: number;
+  total_tags: number;
+  tags: {
+    user: TagResponse[];
+    osm: TagResponse[];
+    model: TagResponse[];
+  };
+}
+
+/**
+ * Store tags to database
+ * @param request - Tags store request with location and tags
+ * @returns Store response with success status and tag IDs
+ * @throws APIError if request fails
+ */
+export const storeTags = async (request: TagsStoreRequest): Promise<TagsStoreResponse> => {
+  if (getOfflineMode()) {
+    console.warn('Offline mode enabled — skipping tag storage');
+    throw new APIError('Offline mode is enabled. Tag storage requires an internet connection.');
+  }
+
+  try {
+    const response = await apiClient.post<TagsStoreResponse>('/api/tags/store', request);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const message = 
+        error.response?.data?.detail || 
+        error.message || 
+        'Failed to store tags.';
+      throw new APIError(message, error.response?.status, error);
+    }
+    throw new APIError('An unexpected error occurred while storing tags.');
+  }
+};
+
+/**
+ * Get tags for a location
+ * @param locationName - Name of the location
+ * @param options - Optional radius and coordinates for proximity search
+ * @returns Tags grouped by source (user, osm, model)
+ * @throws APIError if request fails
+ */
+export const getTags = async (
+  locationName: string,
+  options?: { radius_km?: number; lat?: number; lon?: number }
+): Promise<TagsGroupedResponse> => {
+  if (getOfflineMode()) {
+    console.warn('Offline mode enabled — skipping tag retrieval');
+    throw new APIError('Offline mode is enabled. Tag retrieval requires an internet connection.');
+  }
+
+  try {
+    const params = new URLSearchParams();
+    if (options?.radius_km) params.append('radius_km', options.radius_km.toString());
+    if (options?.lat) params.append('lat', options.lat.toString());
+    if (options?.lon) params.append('lon', options.lon.toString());
+
+    const url = `/api/tags/location/${encodeURIComponent(locationName)}${params.toString() ? '?' + params.toString() : ''}`;
+    const response = await apiClient.get<TagsGroupedResponse>(url);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const message = 
+        error.response?.data?.detail || 
+        error.message || 
+        'Failed to retrieve tags.';
+      throw new APIError(message, error.response?.status, error);
+    }
+    throw new APIError('An unexpected error occurred while retrieving tags.');
+  }
+};
