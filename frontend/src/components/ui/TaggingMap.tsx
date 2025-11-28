@@ -163,6 +163,43 @@ const TaggingMap: React.FC = () => {
       console.log('✅ Voice command: Added', type, 'at map center');
     };
 
+    // Handle request for map center
+    const handleRequestMapCenter = () => {
+      if (map.current) {
+        const center = map.current.getCenter();
+        window.dispatchEvent(new CustomEvent('mapCenterResponse', {
+          detail: { lat: center.lat, lon: center.lng }
+        }));
+      }
+    };
+
+    // Handle adding generated tags from external source
+    const handleAddGeneratedTags = (e: any) => {
+      const newTags = e.detail.tags as Tag[];
+      if (newTags && newTags.length > 0) {
+        // Add to appropriate state based on source
+        const osmTags = newTags.filter(t => t.source === 'osm');
+        const modelTags = newTags.filter(t => t.source === 'model');
+        const userTags = newTags.filter(t => t.source === 'user');
+        
+        if (osmTags.length > 0) {
+          setOsmFeatures((prev) => [...prev, ...osmTags]);
+        }
+        if (modelTags.length > 0) {
+          setTags((prev) => [...prev, ...modelTags]);
+        }
+        if (userTags.length > 0) {
+          setTags((prev) => [...prev, ...userTags]);
+        }
+        
+        console.log('✅ Added generated tags:', {
+          osm: osmTags.length,
+          model: modelTags.length,
+          user: userTags.length
+        });
+      }
+    };
+
     const handleVoiceFilterTags = (e: any) => {
       const source = e.detail.source;
       if (source === 'all') {
@@ -228,6 +265,8 @@ const TaggingMap: React.FC = () => {
     window.addEventListener('voiceNavigateTo', handleVoiceNavigateTo);
     window.addEventListener('voiceNavigateToType', handleVoiceNavigateToType);
     window.addEventListener('voiceClearFilters', handleVoiceClearFilters);
+    window.addEventListener('requestMapCenter', handleRequestMapCenter);
+    window.addEventListener('addGeneratedTags', handleAddGeneratedTags);
 
     return () => {
       window.removeEventListener('voiceAddTag', handleVoiceAddTag);
@@ -235,6 +274,8 @@ const TaggingMap: React.FC = () => {
       window.removeEventListener('voiceNavigateTo', handleVoiceNavigateTo);
       window.removeEventListener('voiceNavigateToType', handleVoiceNavigateToType);
       window.removeEventListener('voiceClearFilters', handleVoiceClearFilters);
+      window.removeEventListener('requestMapCenter', handleRequestMapCenter);
+      window.removeEventListener('addGeneratedTags', handleAddGeneratedTags);
       
       if (map.current) {
         map.current.remove();
