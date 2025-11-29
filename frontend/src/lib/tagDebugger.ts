@@ -267,11 +267,11 @@ export function logAllTags(tags: Tag[]): void {
 export function getSourceColor(source: 'user' | 'osm' | 'model'): string {
   switch (source) {
     case 'user':
-      return '#22c55e'; // Green
-    case 'osm':
       return '#3b82f6'; // Blue
+    case 'osm':
+      return '#22c55e'; // Green
     case 'model':
-      return '#eab308'; // Yellow
+      return '#a855f7'; // Purple
     default:
       return '#6b7280'; // Gray
   }

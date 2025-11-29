@@ -54,6 +54,8 @@ try:
     import numpy as np  # type: ignore
     from ultralytics import YOLO  # type: ignore
     from PIL import Image  # type: ignore
+    from PIL.ExifTags import TAGS, GPSTAGS  # type: ignore
+    import piexif  # type: ignore
     import io
     import threading
     import torch  # type: ignore
@@ -145,6 +147,88 @@ def speak(text: str):
         logger.info(f"[TTS] {text}")
 
 
+def extract_gps_from_image(image_bytes: bytes) -> tuple[float, float] | None:
+    """
+    Extract GPS coordinates from image EXIF data
+    
+    Args:
+        image_bytes: Raw image bytes
+        
+    Returns:
+        Tuple of (latitude, longitude) or None if not found
+    """
+    try:
+        # Try using piexif first
+        try:
+            exif_dict = piexif.load(image_bytes)
+            
+            if piexif.GPSIFD in exif_dict and exif_dict[piexif.GPSIFD]:
+                gps_data = exif_dict[piexif.GPSIFD]
+                
+                # Extract latitude
+                if piexif.GPSIFD.GPSLatitude in gps_data and piexif.GPSIFD.GPSLatitudeRef in gps_data:
+                    lat_data = gps_data[piexif.GPSIFD.GPSLatitude]
+                    lat_ref = gps_data[piexif.GPSIFD.GPSLatitudeRef].decode('utf-8')
+                    
+                    # Convert to decimal degrees
+                    lat = lat_data[0][0]/lat_data[0][1] + lat_data[1][0]/(lat_data[1][1]*60) + lat_data[2][0]/(lat_data[2][1]*3600)
+                    if lat_ref == 'S':
+                        lat = -lat
+                    
+                    # Extract longitude
+                    if piexif.GPSIFD.GPSLongitude in gps_data and piexif.GPSIFD.GPSLongitudeRef in gps_data:
+                        lon_data = gps_data[piexif.GPSIFD.GPSLongitude]
+                        lon_ref = gps_data[piexif.GPSIFD.GPSLongitudeRef].decode('utf-8')
+                        
+                        lon = lon_data[0][0]/lon_data[0][1] + lon_data[1][0]/(lon_data[1][1]*60) + lon_data[2][0]/(lon_data[2][1]*3600)
+                        if lon_ref == 'W':
+                            lon = -lon
+                        
+                        logger.info(f"[GPS] Extracted coordinates: {lat}, {lon}")
+                        return (lat, lon)
+        except Exception as e:
+            logger.debug(f"piexif extraction failed: {e}")
+        
+        # Fallback to PIL
+        image = Image.open(io.BytesIO(image_bytes))
+        exif_data = image._getexif()
+        
+        if not exif_data:
+            return None
+        
+        # Get GPS info
+        gps_info = {}
+        for tag, value in exif_data.items():
+            tag_name = TAGS.get(tag, tag)
+            if tag_name == 'GPSInfo':
+                for gps_tag in value:
+                    gps_tag_name = GPSTAGS.get(gps_tag, gps_tag)
+                    gps_info[gps_tag_name] = value[gps_tag]
+        
+        if not gps_info:
+            return None
+        
+        # Convert GPS coordinates
+        def convert_to_degrees(value):
+            d, m, s = value
+            return d + (m / 60.0) + (s / 3600.0)
+        
+        lat = convert_to_degrees(gps_info['GPSLatitude'])
+        if gps_info['GPSLatitudeRef'] == 'S':
+            lat = -lat
+        
+        lon = convert_to_degrees(gps_info['GPSLongitude'])
+        if gps_info['GPSLongitudeRef'] == 'W':
+            lon = -lon
+        
+        logger.info(f"[GPS] Extracted coordinates: {lat}, {lon}")
+        return (lat, lon)
+        
+    except Exception as e:
+        logger.debug(f"GPS extraction failed: {e}")
+        return None
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize database on startup"""
@@ -231,6 +315,16 @@ async def detect(file: UploadFile = File(...)):
         if _HAS_FULL_STACK and model is not None:
             # === REAL INFERENCE PATH ===
             try:
+                # Extract GPS coordinates from EXIF data
+                gps_coords = extract_gps_from_image(contents)
+                latitude = gps_coords[0] if gps_coords else None
+                longitude = gps_coords[1] if gps_coords else None
+                
+                if gps_coords:
+                    logger.info(f"[GPS] Found coordinates: ({latitude}, {longitude})")
+                else:
+                    logger.info("[GPS] No GPS data found in image")
+                
                 # Validate and load image
                 try:
                     image = Image.open(io.BytesIO(contents)).convert("RGB")
@@ -264,7 +358,9 @@ async def detect(file: UploadFile = File(...)):
                         "detections": [],
                         "message": "No objects detected",
                         "timestamp": timestamp,
-                        "inference_time": round(inference_time, 2)
+                        "inference_time": round(inference_time, 2),
+                        "latitude": latitude,
+                        "longitude": longitude
                     })
                 
                 # Process detections
@@ -299,12 +395,50 @@ async def detect(file: UploadFile = File(...)):
                 speak(sentence)
                 
                 logger.info(f"[DETECT] Found {len(output)} objects")
+                
+                # Auto-save tags to database if GPS coordinates are available
+                if latitude is not None and longitude is not None:
+                    try:
+                        from database import SessionLocal
+                        from crud import create_tag
+                        from schemas import TagCreate
+                        
+                        db = SessionLocal()
+                        saved_count = 0
+                        
+                        for detection in output:
+                            tag_data = TagCreate(
+                                location_name=f"Auto-detected at ({latitude:.6f}, {longitude:.6f})",
+                                lat=latitude,
+                                lon=longitude,
+                                tag_type=detection["label"],
+                                source="model",
+                                confidence=detection["confidence"],
+                                notes=f"Position: {detection['position']}"
+                            )
+                            
+                            try:
+                                create_tag(db=db, tag=tag_data)
+                                saved_count += 1
+                            except Exception as e:
+                                logger.error(f"Failed to save tag '{detection['label']}': {e}")
+                        
+                        db.close()
+                        logger.info(f"[AUTO-SAVE] Saved {saved_count}/{len(output)} model tags to database")
+                        
+                    except Exception as e:
+                        logger.error(f"Auto-save failed: {e}", exc_info=True)
+                else:
+                    logger.info("[AUTO-SAVE] Skipped - no GPS coordinates available")
+                
                 return JSONResponse(content={
                     "detections": output,
                     "spoken": sentence,
                     "count": len(output),
                     "timestamp": timestamp,
-                    "inference_time": round(inference_time, 2)
+                    "inference_time": round(inference_time, 2),
+                    "latitude": latitude,
+                    "longitude": longitude
                 })
                 
             except HTTPException:
