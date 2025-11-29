@@ -14,7 +14,7 @@ import DraggableTag from "../components/DraggableTag";
 import TaggingMap from "../components/ui/TaggingMap";
 import VoiceToggle from "../components/VoiceToggle";
 import { VoiceCommandsContainer } from "../components/VoiceCommandsContainer";
-import { Plus, Mic, MicOff, Navigation, Sparkles, Loader2, Upload, X } from "lucide-react";
+import { Plus, Mic, MicOff, Navigation, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "../hooks/use-toast";
 import { useNavigation } from "../contexts/NavigationContext";
 import type { Tag as MapTag } from "../types/tag";
@@ -41,7 +41,6 @@ const Tagging = () => {
   const [showVoicePanel, setShowVoicePanel] = useState(false);
   const [selectedTag, setSelectedTag] = useState<MapTag | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [generatedTags, setGeneratedTags] = useState<{
     osmTags: MapTag[];
     modelTags: MapTag[];
@@ -189,35 +188,26 @@ const Tagging = () => {
   };
 
   /**
-   * Handle image file selection
+   * Capture image from camera or file picker
    */
-  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      if (!file.type.startsWith('image/')) {
-        toast({
-          title: "Invalid File",
-          description: "Please select an image file",
-          variant: "destructive",
-        });
-        return;
-      }
-      setSelectedImage(file);
-      toast({
-        title: "Image Selected",
-        description: `${file.name} ready for ML detection`,
-      });
-    }
-  };
-
-  /**
-   * Clear selected image
-   */
-  const handleClearImage = () => {
-    setSelectedImage(null);
-    toast({
-      title: "Image Cleared",
-      description: "Image removed from detection",
+  const captureImage = async (): Promise<File | null> => {
+    return new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.capture = 'environment'; // Use back camera on mobile
+      
+      input.onchange = (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (file && file.type.startsWith('image/')) {
+          resolve(file);
+        } else {
+          resolve(null);
+        }
+      };
+      
+      input.oncancel = () => resolve(null);
+      input.click();
     });
   };
 
@@ -360,23 +350,42 @@ const Tagging = () => {
         });
       }
 
-      // 2. If image is selected, run ML model detection
-      if (selectedImage) {
+      // 2. Capture image and run ML model detection
+      toast({
+        title: "Capture Image",
+        description: "Please take a photo or select an image...",
+      });
+
+      const capturedImage = await captureImage();
+      
+      if (capturedImage) {
         toast({
           title: "Analyzing Image",
-          description: "Running ML model detection...",
+          description: `Processing ${capturedImage.name}...`,
         });
 
         try {
-          const detectResponse = await sendImage(selectedImage);
+          const detectResponse = await sendImage(capturedImage);
           
           console.log('Model detections received:', detectResponse.detections.length);
+          console.log('GPS coordinates from image:', detectResponse.latitude, detectResponse.longitude);
+          
+          // Use GPS coordinates from image if available, otherwise use map center
+          const baseLat = detectResponse.latitude || mapCenter.lat;
+          const baseLon = detectResponse.longitude || mapCenter.lon;
+          
+          if (detectResponse.latitude && detectResponse.longitude) {
+            toast({
+              title: "GPS Coordinates Found",
+              description: `Using location from image: ${baseLat.toFixed(6)}, ${baseLon.toFixed(6)}`,
+            });
+          }
           
           // Convert detections to MapTag format with slight position offsets
           const modelTags = detectResponse.detections.map((detection, index): MapTag => {
             // Add slight offset to prevent overlapping tags
-            const offsetLat = mapCenter.lat + (Math.random() - 0.5) * 0.001;
-            const offsetLon = mapCenter.lon + (Math.random() - 0.5) * 0.001;
+            const offsetLat = baseLat + (Math.random() - 0.5) * 0.001;
+            const offsetLon = baseLon + (Math.random() - 0.5) * 0.001;
             
             // Map detection labels to tag types
             let type: MapTag['type'] = 'Obstacle';
@@ -414,6 +423,12 @@ const Tagging = () => {
               title: "Model Detection Complete",
               description: `Detected ${modelTags.length} accessibility features with AI`,
             });
+          } else {
+            toast({
+              title: "No Objects Detected",
+              description: "Try taking a photo with more accessibility features",
+              variant: "destructive",
+            });
           }
         } catch (error) {
           console.error('Model detection error:', error);
@@ -423,6 +438,11 @@ const Tagging = () => {
             variant: "destructive",
           });
         }
+      } else {
+        toast({
+          title: "No Image Captured",
+          description: "Skipping ML detection - only OSM tags loaded",
+        });
       }
 
       // Update state with generated tags
@@ -563,57 +583,12 @@ const Tagging = () => {
           <div className="bg-white rounded-lg shadow-lg p-4 space-y-3">
             <h3 className="font-semibold text-lg flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-purple-600" />
-              Generate Tags
+              Auto-Generate Tags
             </h3>
             
-            {/* Image Upload Section */}
-            <div className="border-b pb-3 space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Upload Image for ML Detection (Optional)
-              </label>
-              
-              {!selectedImage ? (
-                <div className="relative">
-                  <input
-                    id="image-upload"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageSelect}
-                    className="hidden"
-                  />
-                  <label
-                    htmlFor="image-upload"
-                    className="flex items-center justify-center gap-2 w-full px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-colors"
-                  >
-                    <Upload className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm text-gray-600">Choose Image</span>
-                  </label>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between p-2 bg-purple-50 rounded-lg">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <Upload className="w-4 h-4 text-purple-600 flex-shrink-0" />
-                    <span className="text-sm text-gray-700 truncate">
-                      {selectedImage.name}
-                    </span>
-                  </div>
-                  <button
-                    onClick={handleClearImage}
-                    className="flex-shrink-0 p-1 hover:bg-purple-100 rounded transition-colors"
-                    aria-label="Remove image"
-                  >
-                    <X className="w-4 h-4 text-gray-500" />
-                  </button>
-                </div>
-              )}
-              
-              <p className="text-xs text-gray-500">
-                {selectedImage 
-                  ? "Image will be analyzed with ML model"
-                  : "Upload an image to detect accessibility features with AI"
-                }
-              </p>
-            </div>
+            <p className="text-sm text-gray-600">
+              Automatically fetch OSM accessibility features and detect objects from camera
+            </p>
             
             {/* Generate Button */}
             <Button

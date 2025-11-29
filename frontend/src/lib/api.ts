@@ -37,6 +37,10 @@ export interface DetectResponse {
   spoken?: string;
   error?: string;
   timestamp: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  inference_time?: number;
+  count?: number;
 }
 
 export interface VoiceResponse {
