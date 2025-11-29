@@ -472,6 +472,174 @@ async def detect(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 
+@app.post("/detect/batch")
+async def detect_batch(limit: int = Query(default=10, ge=1, le=100, description="Maximum number of images to process")):
+    """
+    Batch process images from the local dataset directory
+    
+    Args:
+        limit: Maximum number of images to process (1-100, default 10)
+    
+    Returns:
+        JSON with array of results including detections, GPS coordinates, and saved tags count
+    """
+    logger.info(f"[BATCH] Starting batch processing with limit={limit}")
+    
+    if not _HAS_FULL_STACK or model is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Batch processing requires full ML stack with loaded model"
+        )
+    
+    # Define dataset directory
+    dataset_dir = Path(__file__).parent.parent / "archive" / "vizwiz_data_ver1" / "data" / "Images"
+    
+    if not dataset_dir.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Dataset directory not found: {dataset_dir}"
+        )
+    
+    # Get list of image files
+    image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
+    image_files = [
+        f for f in dataset_dir.iterdir()
+        if f.is_file() and f.suffix.lower() in image_extensions
+    ]
+    
+    if not image_files:
+        raise HTTPException(
+            status_code=404,
+            detail="No image files found in dataset directory"
+        )
+    
+    # Limit number of images to process
+    images_to_process = image_files[:limit]
+    logger.info(f"[BATCH] Found {len(image_files)} total images, processing {len(images_to_process)}")
+    
+    results = []
+    total_tags_saved = 0
+    processed_count = 0
+    skipped_count = 0
+    error_count = 0
+    
+    confidence = float(os.getenv("CONFIDENCE_THRESHOLD", "0.5"))
+    
+    for img_path in images_to_process:
+        try:
+            logger.info(f"[BATCH] Processing: {img_path.name}")
+            
+            # Read image file
+            with open(img_path, 'rb') as f:
+                contents = f.read()
+            
+            # Extract GPS coordinates
+            gps_coords = extract_gps_from_image(contents)
+            latitude = gps_coords[0] if gps_coords else None
+            longitude = gps_coords[1] if gps_coords else None
+            
+            # Skip images without GPS data
+            if latitude is None or longitude is None:
+                logger.info(f"[BATCH] Skipped {img_path.name} - no GPS data")
+                skipped_count += 1
+                continue
+            
+            # Load and process image
+            image = Image.open(io.BytesIO(contents)).convert("RGB")
+            results_obj = model(image, conf=confidence)
+            boxes = results_obj[0].boxes
+            
+            if boxes is None or len(boxes) == 0:
+                logger.info(f"[BATCH] No detections in {img_path.name}")
+                processed_count += 1
+                continue
+            
+            # Process detections
+            detections = []
+            for box in boxes:
+                conf = float(box.conf[0])
+                cls = int(box.cls[0])
+                label = model.names[cls]
+                
+                # Calculate position
+                x1, x2 = int(box.xyxy[0][0]), int(box.xyxy[0][2])
+                center_x = (x1 + x2) // 2
+                width = image.width
+                
+                position = (
+                    "on the left" if center_x < width / 3 else
+                    "on the right" if center_x > 2 * width / 3 else
+                    "in the center"
+                )
+                
+                detections.append({
+                    "label": label,
+                    "confidence": round(conf, 2),
+                    "position": position
+                })
+            
+            # Auto-save tags to database
+            tags_saved = 0
+            try:
+                from database import SessionLocal
+                from crud import create_tag
+                from schemas import TagCreate
+                
+                db = SessionLocal()
+                
+                for detection in detections:
+                    tag_data = TagCreate(
+                        location_name=f"Dataset: {img_path.name}",
+                        lat=latitude,
+                        lon=longitude,
+                        tag_type=detection["label"],
+                        source="model",
+                        confidence=detection["confidence"],
+                        notes=f"Position: {detection['position']}"
+                    )
+                    
+                    try:
+                        create_tag(db=db, tag=tag_data)
+                        tags_saved += 1
+                    except Exception as e:
+                        logger.error(f"Failed to save tag '{detection['label']}': {e}")
+                
+                db.close()
+                total_tags_saved += tags_saved
+                
+            except Exception as e:
+                logger.error(f"Database save error for {img_path.name}: {e}")
+            
+            results.append({
+                "filename": img_path.name,
+                "latitude": latitude,
+                "longitude": longitude,
+                "detections": detections,
+                "tags_saved": tags_saved
+            })
+            
+            processed_count += 1
+            logger.info(f"[BATCH] Processed {img_path.name}: {len(detections)} detections, {tags_saved} tags saved")
+            
+        except Exception as e:
+            logger.error(f"[BATCH] Error processing {img_path.name}: {e}")
+            error_count += 1
+            continue
+    
+    summary = {
+        "total_images_found": len(image_files),
+        "images_processed": processed_count,
+        "images_skipped": skipped_count,
+        "errors": error_count,
+        "total_tags_saved": total_tags_saved,
+        "results": results
+    }
+    
+    logger.info(f"[BATCH] Complete: {processed_count} processed, {skipped_count} skipped, {error_count} errors, {total_tags_saved} tags saved")
+    
+    return JSONResponse(content=summary)
+
+
 @app.get("/voice")
 async def generate_voice(text: str = Query(..., min_length=1, max_length=500, description="Text to convert to speech")):
     """

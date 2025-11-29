@@ -19,7 +19,7 @@ import { toast } from "../hooks/use-toast";
 import { useNavigation } from "../contexts/NavigationContext";
 import type { Tag as MapTag } from "../types/tag";
 import { fetchAccessibilityFeatures, mapOSMTagToType } from "../lib/osmApi";
-import { storeTags, getTags, type TagCreate, sendImage } from "../lib/api";
+import { storeTags, getTags, type TagCreate, sendImage, processBatchImages } from "../lib/api";
 
 interface Tag {
   id: string;

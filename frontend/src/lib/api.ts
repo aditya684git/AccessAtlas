@@ -164,6 +164,56 @@ export const healthCheck = async (): Promise<boolean> => {
 };
 
 /**
+ * Batch Detection Types
+ */
+export interface BatchDetectionResult {
+  filename: string;
+  latitude: number;
+  longitude: number;
+  detections: Detection[];
+  tags_saved: number;
+}
+
+export interface BatchDetectionResponse {
+  total_images_found: number;
+  images_processed: number;
+  images_skipped: number;
+  errors: number;
+  total_tags_saved: number;
+  results: BatchDetectionResult[];
+}
+
+/**
+ * Process batch of images from dataset directory
+ * @param limit - Maximum number of images to process (1-100)
+ * @returns Batch processing results with detections and saved tags
+ * @throws APIError if request fails
+ */
+export const processBatchImages = async (limit: number = 10): Promise<BatchDetectionResponse> => {
+  if (getOfflineMode()) {
+    console.warn('Offline mode enabled — skipping batch processing');
+    throw new APIError('Offline mode is enabled. Batch processing requires an internet connection.');
+  }
+
+  try {
+    const response = await apiClient.post<BatchDetectionResponse>('/detect/batch', null, {
+      params: { limit },
+      timeout: 300000, // 5 minute timeout for batch processing
+    });
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const message = 
+        error.response?.data?.detail || 
+        error.message || 
+        'Batch processing failed.';
+      throw new APIError(message, error.response?.status, error);
+    }
+    throw new APIError('An unexpected error occurred during batch processing.');
+  }
+};
+
+/**
  * Tags API - Types
  */
 export interface TagCreate {
