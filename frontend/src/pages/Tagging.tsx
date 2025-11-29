@@ -350,13 +350,11 @@ const Tagging = () => {
         });
       }
 
-      // 2. Capture image and run ML model detection
-      toast({
-        title: "Capture Image",
-        description: "Please take a photo or select an image...",
-      });
-
-      const capturedImage = await captureImage();
+      // 2. Optionally capture image for ML model detection (but don't block)
+      // Skip image capture to make it faster - just fetch OSM tags
+      // If users want ML detection, they can add a separate button
+      
+      const capturedImage: File | null = null; // Skip automatic image capture
       
       if (capturedImage) {
         toast({
@@ -583,11 +581,11 @@ const Tagging = () => {
           <div className="bg-white rounded-lg shadow-lg p-4 space-y-3">
             <h3 className="font-semibold text-lg flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-purple-600" />
-              Auto-Generate Tags
+              Generate Tags
             </h3>
             
             <p className="text-sm text-gray-600">
-              Automatically fetch OSM accessibility features and detect objects from camera
+              Automatically fetch accessibility features from OpenStreetMap at current location
             </p>
             
             {/* Generate Button */}
