@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { sendVoice, APIError } from '../lib/api';
+import { ttsService } from '../lib/ttsService';
 
 interface UseVoiceState {
   isSpeaking: boolean;
@@ -13,7 +13,7 @@ interface UseVoiceReturn extends UseVoiceState {
 }
 
 /**
- * Custom hook for voice feedback logic
+ * Custom hook for voice feedback logic using Web Speech API
  * Manages voice playback state, loading, and error handling
  * 
  * @returns {UseVoiceReturn} Voice state and methods
@@ -33,7 +33,7 @@ export const useVoice = (): UseVoiceReturn => {
   });
 
   /**
-   * Speak given text using backend voice API
+   * Speak given text using browser's Web Speech API
    */
   const speak = useCallback(async (text: string) => {
     if (!text || text.trim().length === 0) {
@@ -44,7 +44,7 @@ export const useVoice = (): UseVoiceReturn => {
     setState((prev) => ({ ...prev, isSpeaking: true, error: null }));
 
     try {
-      await sendVoice(text);
+      await ttsService.speak(text);
 
       setState((prev) => ({
         ...prev,
@@ -56,11 +56,9 @@ export const useVoice = (): UseVoiceReturn => {
       console.log('[Voice] Spoke:', text);
     } catch (err) {
       const errorMessage =
-        err instanceof APIError
+        err instanceof Error
           ? err.message
-          : err instanceof Error
-          ? err.message
-          : 'Voice feedback failed unexpectedly.';
+          : 'Voice feedback failed unexpectedly. Please check if your browser supports Web Speech API.';
 
       console.error('[Voice Error]', errorMessage, err);
 
