@@ -56,6 +56,7 @@ const TaggingMap: React.FC = () => {
   const [osmFeatures, setOsmFeatures] = useState<Tag[]>([]);
   const [showOSMFeatures, setShowOSMFeatures] = useState<boolean>(true);
   const markers = useRef<L.Marker[]>([]);
+  const userLocationMarker = useRef<L.Marker | null>(null);
   
   // Source filtering state
   const [showUserTags, setShowUserTags] = useState(true);
@@ -85,6 +86,36 @@ const TaggingMap: React.FC = () => {
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
         }).addTo(map.current!);
+        
+        // Listen for user location detection from parent component
+        const handleUserLocation = (e: any) => {
+          const { lat, lon } = e.detail;
+          if (map.current) {
+            // Center map on user location
+            map.current.setView([lat, lon], DEFAULT_ZOOM);
+            
+            // Add blue marker for user location
+            if (userLocationMarker.current) {
+              userLocationMarker.current.remove();
+            }
+            
+            const userIcon = L.divIcon({
+              html: '<div style="font-size: 32px; line-height: 1;">📍</div>',
+              className: 'user-location-marker',
+              iconSize: [32, 32],
+              iconAnchor: [16, 16],
+            });
+            
+            userLocationMarker.current = L.marker([lat, lon], { icon: userIcon })
+              .addTo(map.current)
+              .bindPopup('Your Location')
+              .openPopup();
+            
+            console.log('Map centered on user location:', lat, lon);
+          }
+        };
+        
+        window.addEventListener('userLocationDetected', handleUserLocation);
 
         // Handle map clicks (use ref to read latest selected type)
         map.current.on('click', async (e: L.LeafletMouseEvent) => {

@@ -45,6 +45,109 @@ const Tagging = () => {
     osmTags: MapTag[];
     modelTags: MapTag[];
   }>({ osmTags: [], modelTags: [] });
+  const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null);
+
+  // Detect user's location on component mount
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const location = { lat: latitude, lon: longitude };
+          setUserLocation(location);
+          
+          // Dispatch event to center map on user location
+          window.dispatchEvent(new CustomEvent('userLocationDetected', {
+            detail: location
+          }));
+          
+          console.log('User location detected:', location);
+          toast({
+            title: "Location Detected",
+            description: `Centered map on your location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+          });
+        },
+        (error) => {
+          console.warn('Geolocation error:', error.message);
+          // Fallback to Clemson, SC
+          const fallback = { lat: 34.6834, lon: -82.8374 };
+          setUserLocation(fallback);
+          
+          toast({
+            title: "Location Access Denied",
+            description: "Using default location: Clemson, SC",
+            variant: "destructive",
+          });
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    } else {
+      // Browser doesn't support geolocation, use fallback
+      const fallback = { lat: 34.6834, lon: -82.8374 };
+      setUserLocation(fallback);
+      
+      toast({
+        title: "Geolocation Not Supported",
+        description: "Using default location: Clemson, SC",
+        variant: "destructive",
+      });
+    }
+  }, []);
+
+  // Detect user's location on component mount
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const location = { lat: latitude, lon: longitude };
+          setUserLocation(location);
+          
+          // Dispatch event to center map on user location
+          window.dispatchEvent(new CustomEvent('userLocationDetected', {
+            detail: location
+          }));
+          
+          console.log('User location detected:', location);
+          toast({
+            title: "Location Detected",
+            description: `Centered map on your location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+          });
+        },
+        (error) => {
+          console.warn('Geolocation error:', error.message);
+          // Fallback to Clemson, SC
+          const fallback = { lat: 34.6834, lon: -82.8374 };
+          setUserLocation(fallback);
+          
+          toast({
+            title: "Location Access Denied",
+            description: "Using default location: Clemson, SC",
+            variant: "destructive",
+          });
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    } else {
+      // Browser doesn't support geolocation, use fallback
+      const fallback = { lat: 34.6834, lon: -82.8374 };
+      setUserLocation(fallback);
+      
+      toast({
+        title: "Geolocation Not Supported",
+        description: "Using default location: Clemson, SC",
+        variant: "destructive",
+      });
+    }
+  }, []);
 
   // Load saved tags on component mount
   useEffect(() => {
@@ -280,10 +383,10 @@ const Tagging = () => {
         window.addEventListener('mapCenterResponse', handler);
         window.dispatchEvent(new CustomEvent('requestMapCenter'));
         
-        // Fallback to default if no response in 1s
+        // Fallback to user location or default if no response in 1s
         setTimeout(() => {
           window.removeEventListener('mapCenterResponse', handler);
-          resolve({ lat: 34.6834, lon: -82.8374 });
+          resolve(userLocation || { lat: 34.6834, lon: -82.8374 });
         }, 1000);
       });
 
@@ -563,118 +666,25 @@ const Tagging = () => {
           </Button>
         </div>
 
-        {/* Generate Tags Panel - positioned on left side to avoid debug button */}
-        <div className="absolute top-4 left-4 z-[1000] max-w-sm">
-          <div className="bg-white rounded-lg shadow-lg p-4 space-y-3">
-            <h3 className="font-semibold text-lg flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-purple-600" />
-              Generate Tags
-            </h3>
-            
-            <p className="text-sm text-gray-600">
-              Automatically fetch accessibility features from OpenStreetMap at current location
-            </p>
-            
-            {/* Generate Button */}
-            <Button
-              onClick={handleGenerateTags}
-              disabled={isGenerating}
-              className="w-full flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Generating...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  <span>Generate Tags</span>
-                </>
-              )}
-            </Button>
-
-            {/* Generated Tags Summary */}
-            {(generatedTags.osmTags.length > 0 || generatedTags.modelTags.length > 0) && (
-              <div className="border-t pt-3 space-y-2">
-                <h4 className="font-medium text-sm text-gray-700">Generated Tags:</h4>
-                
-                {/* Local Tags (User-created) */}
-                <div className="text-xs">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                    <span className="font-medium">Local Tags:</span>
-                    <span className="text-gray-600">{tags.length}</span>
-                  </div>
-                  {tags.length > 0 && (
-                    <ul className="ml-5 space-y-1">
-                      {tags.slice(0, 3).map((tag) => (
-                        <li key={tag.id} className="text-gray-600">
-                          • {tag.label}
-                        </li>
-                      ))}
-                      {tags.length > 3 && (
-                        <li className="text-gray-500 italic">
-                          +{tags.length - 3} more
-                        </li>
-                      )}
-                    </ul>
-                  )}
-                </div>
-
-                {/* OSM Tags */}
-                <div className="text-xs">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                    <span className="font-medium">OSM Tags:</span>
-                    <span className="text-gray-600">{generatedTags.osmTags.length}</span>
-                  </div>
-                  {generatedTags.osmTags.length > 0 && (
-                    <ul className="ml-5 space-y-1">
-                      {generatedTags.osmTags.slice(0, 3).map((tag) => (
-                        <li key={tag.id} className="text-gray-600">
-                          • {tag.type} {tag.address && `- ${tag.address.substring(0, 30)}...`}
-                        </li>
-                      ))}
-                      {generatedTags.osmTags.length > 3 && (
-                        <li className="text-gray-500 italic">
-                          +{generatedTags.osmTags.length - 3} more
-                        </li>
-                      )}
-                    </ul>
-                  )}
-                </div>
-
-                {/* Model Tags */}
-                <div className="text-xs">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-3 h-3 rounded-full bg-purple-500"></div>
-                    <span className="font-medium">Model Tags:</span>
-                    <span className="text-gray-600">{generatedTags.modelTags.length}</span>
-                  </div>
-                  {generatedTags.modelTags.length > 0 && (
-                    <ul className="ml-5 space-y-1">
-                      {generatedTags.modelTags.slice(0, 3).map((tag) => (
-                        <li key={tag.id} className="text-gray-600 flex items-center gap-1">
-                          • {tag.type}
-                          {tag.confidence && (
-                            <span className="text-purple-600 font-medium">
-                              ({Math.round(tag.confidence * 100)}%)
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                      {generatedTags.modelTags.length > 3 && (
-                        <li className="text-gray-500 italic">
-                          +{generatedTags.modelTags.length - 3} more
-                        </li>
-                      )}
-                    </ul>
-                  )}
-                </div>
-              </div>
+        {/* Generate Tags Button - positioned on right side below menu */}
+        <div className="absolute top-20 right-4 z-[1000]">
+          <Button
+            onClick={handleGenerateTags}
+            disabled={isGenerating}
+            className="flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white shadow-lg"
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Generating...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                <span>Generate Tags</span>
+              </>
             )}
-          </div>
+          </Button>
         </div>
       </div>
     </MobileLayout>
