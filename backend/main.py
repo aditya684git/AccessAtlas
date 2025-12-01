@@ -30,18 +30,23 @@ from tags_api import router as tags_router
 # Include tags router
 app.include_router(tags_router)
 
-# CORS configuration - get from environment or use defaults
+# CORS configuration - support local development and Vercel deployment
 CORS_ORIGINS = os.getenv(
     "CORS_ORIGINS",
-    "http://localhost:8080,http://localhost:3000,http://localhost:8081,https://*.onrender.com"
+    # Default origins: local dev + Vercel frontend
+    "http://localhost:8080,http://localhost:3000,http://localhost:8081,https://access-atlas.vercel.app"
 ).split(",")
+
+# Add support for all Vercel preview deployments
+ALLOW_ALL_VERCEL = os.getenv("ALLOW_VERCEL_ORIGINS", "true").lower() == "true"
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
+    allow_origins=CORS_ORIGINS if not ALLOW_ALL_VERCEL else ["*"],  # Allow all origins if ALLOW_VERCEL_ORIGINS is true
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
