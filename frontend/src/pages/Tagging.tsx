@@ -283,7 +283,7 @@ const Tagging = () => {
         // Fallback to default if no response in 1s
         setTimeout(() => {
           window.removeEventListener('mapCenterResponse', handler);
-          resolve({ lat: 34.67, lon: -82.48 });
+          resolve({ lat: 34.6834, lon: -82.8374 });
         }, 1000);
       });
 
@@ -350,96 +350,83 @@ const Tagging = () => {
         });
       }
 
-      // 2. Optionally capture image for ML model detection (but don't block)
-      // Skip image capture to make it faster - just fetch OSM tags
-      // If users want ML detection, they can add a separate button
-      
-      const capturedImage: File | null = null; // Skip automatic image capture
-      
-      if (capturedImage) {
-        toast({
-          title: "Analyzing Image",
-          description: `Processing ${capturedImage.name}...`,
-        });
+      // 2. Process images from local dataset with ML model detection
+      toast({
+        title: "Processing Dataset Images",
+        description: "Running YOLOv5 detection on local images...",
+      });
 
-        try {
-          const detectResponse = await sendImage(capturedImage);
-          
-          console.log('Model detections received:', detectResponse.detections.length);
-          console.log('GPS coordinates from image:', detectResponse.latitude, detectResponse.longitude);
-          
-          // Use GPS coordinates from image if available, otherwise use map center
-          const baseLat = detectResponse.latitude || mapCenter.lat;
-          const baseLon = detectResponse.longitude || mapCenter.lon;
-          
-          if (detectResponse.latitude && detectResponse.longitude) {
-            toast({
-              title: "GPS Coordinates Found",
-              description: `Using location from image: ${baseLat.toFixed(6)}, ${baseLon.toFixed(6)}`,
-            });
-          }
-          
-          // Convert detections to MapTag format with slight position offsets
-          const modelTags = detectResponse.detections.map((detection, index): MapTag => {
-            // Add slight offset to prevent overlapping tags
-            const offsetLat = baseLat + (Math.random() - 0.5) * 0.001;
-            const offsetLon = baseLon + (Math.random() - 0.5) * 0.001;
-            
-            // Map detection labels to tag types
-            let type: MapTag['type'] = 'Obstacle';
-            const label = detection.label.toLowerCase();
-            
-            if (label.includes('ramp') || label.includes('wheelchair')) {
-              type = 'Ramp';
-            } else if (label.includes('elevator') || label.includes('lift')) {
-              type = 'Elevator';
-            } else if (label.includes('door') || label.includes('entrance')) {
-              type = 'Entrance';
-            } else if (label.includes('path') || label.includes('tactile')) {
-              type = 'Tactile Path';
+      try {
+        // Process up to 10 images from the local dataset
+        const batchResponse = await processBatchImages(10);
+        
+        console.log('Batch processing results:', batchResponse);
+        
+        if (batchResponse.images_processed > 0) {
+          // Convert batch detections to MapTag format
+          const batchModelTags = batchResponse.results.flatMap((result): MapTag[] => {
+            if (!result.detections || result.detections.length === 0) {
+              return [];
             }
 
-            return {
-              id: `model-${Date.now()}-${index}`,
-              type,
-              lat: offsetLat,
-              lon: offsetLon,
-              timestamp: new Date().toISOString(),
-              source: 'model',
-              confidence: detection.confidence,
-              readonly: true,
-              address: `Detected: ${detection.label} (${detection.position})`,
-            };
+            // Use GPS coordinates from image
+            const baseLat = result.latitude;
+            const baseLon = result.longitude;
+
+            return result.detections.map((detection, index): MapTag => {
+              // Add slight offset to prevent overlapping tags
+              const offsetLat = baseLat + (Math.random() - 0.5) * 0.001;
+              const offsetLon = baseLon + (Math.random() - 0.5) * 0.001;
+              
+              // Map detection labels to tag types
+              let type: MapTag['type'] = 'Obstacle';
+              const label = detection.label.toLowerCase();
+              
+              if (label.includes('ramp') || label.includes('wheelchair')) {
+                type = 'Ramp';
+              } else if (label.includes('elevator') || label.includes('lift')) {
+                type = 'Elevator';
+              } else if (label.includes('door') || label.includes('entrance')) {
+                type = 'Entrance';
+              } else if (label.includes('path') || label.includes('tactile')) {
+                type = 'Tactile Path';
+              }
+
+              return {
+                id: `model-${result.filename}-${Date.now()}-${index}`,
+                type,
+                lat: offsetLat,
+                lon: offsetLon,
+                timestamp: new Date().toISOString(),
+                source: 'model',
+                confidence: detection.confidence,
+                readonly: true,
+                address: `${result.filename}: ${detection.label} (${detection.position})`,
+              };
+            });
           });
 
-          modelTagsResult.push(...modelTags);
+          modelTagsResult.push(...batchModelTags);
           
-          console.log('Model Tags created:', modelTags.length);
+          console.log('Batch Model Tags created:', batchModelTags.length);
           
-          if (modelTags.length > 0) {
-            toast({
-              title: "Model Detection Complete",
-              description: `Detected ${modelTags.length} accessibility features with AI`,
-            });
-          } else {
-            toast({
-              title: "No Objects Detected",
-              description: "Try taking a photo with more accessibility features",
-              variant: "destructive",
-            });
-          }
-        } catch (error) {
-          console.error('Model detection error:', error);
           toast({
-            title: "Model Detection Failed",
-            description: error instanceof Error ? error.message : "Could not analyze image",
+            title: "Batch Processing Complete",
+            description: `Processed ${batchResponse.images_processed} images, found ${batchModelTags.length} accessibility features`,
+          });
+        } else {
+          toast({
+            title: "No Images Processed",
+            description: `Found ${batchResponse.total_images_found} images but ${batchResponse.images_skipped} had no GPS data`,
             variant: "destructive",
           });
         }
-      } else {
+      } catch (error) {
+        console.error('Batch processing error:', error);
         toast({
-          title: "No Image Captured",
-          description: "Skipping ML detection - only OSM tags loaded",
+          title: "Batch Processing Failed",
+          description: error instanceof Error ? error.message : "Could not process dataset images",
+          variant: "destructive",
         });
       }
 

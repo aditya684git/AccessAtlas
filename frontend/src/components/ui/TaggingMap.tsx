@@ -14,7 +14,7 @@ import { TagDebugPanel } from './TagDebugPanel';
 import { getSourceColor } from '../../lib/tagDebugger';
 import '../../lib/testDataGenerator'; // Adds window.addTestTags() and window.clearTestTags()
 
-const DEFAULT_CENTER: [number, number] = [34.67, -82.48];
+const DEFAULT_CENTER: [number, number] = [34.6834, -82.8374];
 const DEFAULT_ZOOM = 15;
 
 // Tag type to emoji icon mapping
