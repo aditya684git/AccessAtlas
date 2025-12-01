@@ -30,7 +30,7 @@ interface Tag {
 
 const Tagging = () => {
   const navigate = useNavigate();
-  const { startNavigation } = useNavigation();
+  const { startNavigation, setUserLocation: setContextUserLocation } = useNavigation();
   const [tags, setTags] = useState<Tag[]>([
     { id: "1", label: "Family Restroom", x: 50, y: 20 },
     { id: "2", label: "Bakinginator", x: 50, y: 45 },
@@ -55,6 +55,7 @@ const Tagging = () => {
           const { latitude, longitude } = position.coords;
           const location = { lat: latitude, lon: longitude };
           setUserLocation(location);
+          setContextUserLocation(location); // Update NavigationContext for accurate distance
           
           // Dispatch event to center map on user location
           window.dispatchEvent(new CustomEvent('userLocationDetected', {
@@ -72,6 +73,7 @@ const Tagging = () => {
           // Fallback to Clemson, SC
           const fallback = { lat: 34.6834, lon: -82.8374 };
           setUserLocation(fallback);
+          setContextUserLocation(fallback); // Update NavigationContext
           
           toast({
             title: "Location Access Denied",
@@ -89,6 +91,7 @@ const Tagging = () => {
       // Browser doesn't support geolocation, use fallback
       const fallback = { lat: 34.6834, lon: -82.8374 };
       setUserLocation(fallback);
+      setContextUserLocation(fallback); // Update NavigationContext
       
       toast({
         title: "Geolocation Not Supported",
@@ -96,58 +99,7 @@ const Tagging = () => {
         variant: "destructive",
       });
     }
-  }, []);
-
-  // Detect user's location on component mount
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          const location = { lat: latitude, lon: longitude };
-          setUserLocation(location);
-          
-          // Dispatch event to center map on user location
-          window.dispatchEvent(new CustomEvent('userLocationDetected', {
-            detail: location
-          }));
-          
-          console.log('User location detected:', location);
-          toast({
-            title: "Location Detected",
-            description: `Centered map on your location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
-          });
-        },
-        (error) => {
-          console.warn('Geolocation error:', error.message);
-          // Fallback to Clemson, SC
-          const fallback = { lat: 34.6834, lon: -82.8374 };
-          setUserLocation(fallback);
-          
-          toast({
-            title: "Location Access Denied",
-            description: "Using default location: Clemson, SC",
-            variant: "destructive",
-          });
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
-        }
-      );
-    } else {
-      // Browser doesn't support geolocation, use fallback
-      const fallback = { lat: 34.6834, lon: -82.8374 };
-      setUserLocation(fallback);
-      
-      toast({
-        title: "Geolocation Not Supported",
-        description: "Using default location: Clemson, SC",
-        variant: "destructive",
-      });
-    }
-  }, []);
+  }, [setContextUserLocation]);
 
   // Load saved tags on component mount
   useEffect(() => {

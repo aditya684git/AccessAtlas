@@ -448,10 +448,11 @@ const TaggingMap: React.FC = () => {
           <div style="font-size: 13px; min-width: 200px; max-width: 280px;">
             <div style="margin-bottom: 8px;">
               <strong style="font-size: 14px;">${tag.type}</strong>
-              ${isReadonly ? '<span style="background: #10b981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px;">OSM</span>' : ''}
-              ${!tag.address && !isReadonly ? '<span style="background: #f59e0b; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px;">OLD TAG</span>' : ''}<br/>
+              ${tag.source === 'osm' ? '<span style="background: #10b981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px;">OSM</span>' : ''}
+              ${tag.source === 'model' ? '<span style="background: #9333ea; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px;">MODEL</span>' : ''}
+              ${!tag.address && tag.source === 'user' ? '<span style="background: #f59e0b; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px;">OLD TAG</span>' : ''}<br/>
               <span style="color: #666; font-size: 11px;">${tag.lat.toFixed(6)}, ${tag.lon.toFixed(6)}</span>
-              ${tag.address ? `<div style="margin-top: 6px; padding: 6px; background: #f3f4f6; border-radius: 4px; border-left: 3px solid #2563eb;"><span style="color: #374151; font-size: 12px; line-height: 1.4;">${tag.address}</span></div>` : `<div style="margin-top: 6px; padding: 4px; background: #fef3c7; border-radius: 4px; border-left: 3px solid #f59e0b;"><span style="color: #92400e; font-size: 11px;">Created when offline</span></div>`}
+              ${tag.address ? `<div style="margin-top: 6px; padding: 6px; background: #f3f4f6; border-radius: 4px; border-left: 3px solid #2563eb;"><span style="color: #374151; font-size: 12px; line-height: 1.4;">${tag.address}</span></div>` : tag.source === 'user' ? `<div style="margin-top: 6px; padding: 4px; background: #fef3c7; border-radius: 4px; border-left: 3px solid #f59e0b;"><span style="color: #92400e; font-size: 11px;">Created when offline</span></div>` : ''}
               <div style="margin-top: 6px;"><small style="color: #999; font-size: 11px;">${new Date(tag.timestamp).toLocaleString()}</small></div>
             </div>`;
 
