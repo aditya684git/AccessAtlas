@@ -1,13 +1,16 @@
 import axios, { AxiosError } from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Use environment variable in production, localhost in development
+const BASE_URL = import.meta.env.VITE_API_URL || 
+  (import.meta.env.PROD ? 'https://accessatlas.onrender.com' : 'http://localhost:8000');
 const OFFLINE_MODE_KEY = 'offline_mode_enabled';
 
 // Log the API URL being used (helps debug deployment issues)
 console.log('🔧 API Configuration:', {
   VITE_API_URL: import.meta.env.VITE_API_URL,
   BASE_URL: BASE_URL,
-  mode: import.meta.env.MODE
+  mode: import.meta.env.MODE,
+  isProd: import.meta.env.PROD
 });
 
 // Helper to check offline mode
